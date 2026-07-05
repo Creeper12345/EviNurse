@@ -1,0 +1,17 @@
+dataset:
+  hf_repo: Agnania/NursData-MCQ
+  local_path: data/NursData-MCQ/evinurse_automated_eval_3438.json
+  sample_path: data/samples/mcq_sample.json
+
+model:
+  name: EviNurse
+  base_url: http://127.0.0.1:8000/v1
+  api_key_env: OPENAI_API_KEY
+
+generation:
+  temperature: 0.0
+  max_tokens: 32
+
+output:
+  predictions_path: outputs/nursdata_mcq_predictions.json
+

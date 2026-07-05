@@ -1,0 +1,21 @@
+server:
+  framework: vllm
+  host: 0.0.0.0
+  port: 8000
+
+model:
+  model_path: Agnania/EviNurse-32B
+  served_model_name: EviNurse
+  tensor_parallel_size: 1
+  max_model_len: 4096
+  gpu_memory_utilization: 0.90
+
+rag:
+  enabled: false
+  base_url: http://127.0.0.1:50002
+  endpoint: /getReference
+
+links:
+  dataset: https://huggingface.co/datasets/Agnania/NursData-MCQ
+  model: https://huggingface.co/Agnania/EviNurse-32B
+  code: https://github.com/Creeper12345/EviNurse.git
