@@ -9,7 +9,6 @@ paths and service endpoints to environment variables.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
@@ -28,7 +27,12 @@ from transformers import AutoTokenizer
 MODEL_PATH = os.getenv("MODEL_PATH", "Agnania/EviNurse-32B")
 SERVED_MODEL_NAME = os.getenv("SERVED_MODEL_NAME", "EviNurse")
 RAG_BASE_URL = os.getenv("RAG_BASE_URL", "http://127.0.0.1:50002")
+RAG_MODE = os.getenv("RAG_MODE", "dual").lower()
+RAG_SOURCE_ENDPOINT = os.getenv("RAG_SOURCE_ENDPOINT", "/retrieve_sources")
+RAG_PASSAGE_ENDPOINT = os.getenv("RAG_PASSAGE_ENDPOINT", "/retrieve_passages")
 RAG_ENDPOINT = os.getenv("RAG_ENDPOINT", "/getReference")
+RAG_TOP_K_SOURCES = int(os.getenv("RAG_TOP_K_SOURCES", "5"))
+RAG_TOP_K_PASSAGES = int(os.getenv("RAG_TOP_K_PASSAGES", "5"))
 TENSOR_PARALLEL_SIZE = int(os.getenv("TENSOR_PARALLEL_SIZE", "1"))
 MAX_MODEL_LEN = int(os.getenv("MAX_MODEL_LEN", "32768"))
 GPU_MEMORY_UTILIZATION = float(os.getenv("GPU_MEMORY_UTILIZATION", "0.80"))
@@ -199,15 +203,85 @@ async def rewrite_query(messages: list[dict[str, str]]) -> str:
     return rewritten or messages[-1]["content"]
 
 
-async def get_reference(query: str) -> list[dict]:
-    payload = {"request": query}
+async def post_retrieval(endpoint: str, payload: dict) -> list[dict]:
+    """Call a retrieval endpoint and normalize list-like responses."""
+
+    if not endpoint.startswith("/"):
+        endpoint = "/" + endpoint
+    url = f"{RAG_BASE_URL}{endpoint}"
     async with httpx.AsyncClient(timeout=25) as client:
-        response = await client.post(f"{RAG_BASE_URL}{RAG_ENDPOINT}", json=payload)
+        response = await client.post(url, json=payload)
         response.raise_for_status()
     result = response.json()
+    if isinstance(result, dict):
+        for key in ("data", "results", "references", "sources", "passages"):
+            if isinstance(result.get(key), list):
+                result = result[key]
+                break
     if not isinstance(result, list):
         return []
-    return [item for item in result if isinstance(item, dict) and item.get("content")]
+    return [item for item in result if isinstance(item, dict)]
+
+
+def extract_source_ids(sources: list[dict]) -> list[str]:
+    ids = []
+    for item in sources[:RAG_TOP_K_SOURCES]:
+        source_id = item.get("source_id") or item.get("id") or item.get("doc_id") or item.get("doc_name")
+        if source_id is not None:
+            ids.append(str(source_id))
+    return ids
+
+
+def normalize_reference_items(items: list[dict]) -> list[dict]:
+    normalized = []
+    for item in items:
+        content = item.get("content") or item.get("text") or item.get("passage")
+        if not content:
+            continue
+        normalized.append(
+            {
+                "doc_name": item.get("doc_name") or item.get("source") or item.get("title"),
+                "content": content,
+                "source_type": item.get("source_type") or item.get("category"),
+                "year": item.get("year") or item.get("publication_year"),
+                "score": item.get("score"),
+            }
+        )
+    return normalized[:RAG_TOP_K_PASSAGES]
+
+
+async def get_reference(query: str) -> list[dict]:
+    if RAG_MODE == "single":
+        items = await post_retrieval(
+            RAG_ENDPOINT,
+            {"request": query, "query": query, "top_k": RAG_TOP_K_PASSAGES},
+        )
+        return normalize_reference_items(items)
+
+    try:
+        sources = await post_retrieval(
+            RAG_SOURCE_ENDPOINT,
+            {"request": query, "query": query, "top_k": RAG_TOP_K_SOURCES},
+        )
+        source_ids = extract_source_ids(sources)
+        passages = await post_retrieval(
+            RAG_PASSAGE_ENDPOINT,
+            {
+                "request": query,
+                "query": query,
+                "source_ids": source_ids,
+                "sources": sources[:RAG_TOP_K_SOURCES],
+                "top_k": RAG_TOP_K_PASSAGES,
+            },
+        )
+        references = normalize_reference_items(passages)
+        if references:
+            return references
+    except httpx.HTTPError:
+        pass
+
+    payload = {"request": query}
+    return normalize_reference_items(await post_retrieval(RAG_ENDPOINT, payload))
 
 
 def build_rag_prompt(question: str, references: list[dict]) -> str:
@@ -215,7 +289,13 @@ def build_rag_prompt(question: str, references: list[dict]) -> str:
     for item in references:
         doc_name = item.get("doc_name") or item.get("source") or "Untitled source"
         content = item.get("content", "")
-        evidence_blocks.append(f"[参考文献名称]:{doc_name}\n\n[参考文献内容]:{content}")
+        source_type = item.get("source_type")
+        year = item.get("year")
+        meta = "；".join(str(x) for x in [source_type, year] if x)
+        header = f"[参考文献名称]:{doc_name}"
+        if meta:
+            header += f"\n[来源元数据]:{meta}"
+        evidence_blocks.append(f"{header}\n\n[参考文献内容]:{content}")
     evidence = "\n\n\n".join(evidence_blocks)
 
     return f"""
@@ -224,8 +304,10 @@ def build_rag_prompt(question: str, references: list[dict]) -> str:
 【证据使用规则】
 1. 证据优先级从高到低：临床实践指南、证据总结、系统评价/Meta分析、专家共识或原始研究。
 2. 当高等级证据已形成明确结论时，不得使用低等级证据替代或削弱结论。
-3. 不得引入证据之外的事实、数据、阈值或推断性结论。
-4. 当证据不足或结论不明确时，应保守作答。
+3. 可综合多条高等级证据形成判断，不逐条罗列文献内容。
+4. 不得引入证据之外的事实、数据、阈值或推断性结论。
+5. 当证据不足或结论不明确时，应保守作答。
+6. 与护理问题无关的证据无需提及。
 
 【回答结构要求】
 1. 优先给出最关键、可执行的护理建议。

@@ -9,7 +9,7 @@ The release includes:
 - MCQ evaluation code for OpenAI-compatible endpoints.
 - Answer extraction and exact-match accuracy logic.
 - Model-serving examples for vLLM.
-- A de-identified RAG API example that preserves the OpenAI-compatible interface and evidence prompt flow.
+- A de-identified RAG API example that preserves the OpenAI-compatible interface, query rewrite step, source-level retrieval hook, passage-level retrieval hook, and evidence prompt flow.
 - Configuration templates for evaluation and model serving.
 - Dataset validation utilities.
 - Requirements and Apache-2.0 license.

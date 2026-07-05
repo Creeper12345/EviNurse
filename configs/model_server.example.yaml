@@ -11,9 +11,14 @@ model:
   gpu_memory_utilization: 0.90
 
 rag:
-  enabled: false
+  enabled: true
+  mode: dual
   base_url: http://127.0.0.1:50002
+  source_endpoint: /retrieve_sources
+  passage_endpoint: /retrieve_passages
   endpoint: /getReference
+  top_k_sources: 5
+  top_k_passages: 5
 
 links:
   dataset: https://huggingface.co/datasets/Agnania/NursData-MCQ

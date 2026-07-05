@@ -2,18 +2,18 @@
 
 ## Automated MCQ Evaluation
 
-1. Install dependencies.
+1. Install dependencies with `pip install -r requirements.txt`.
 2. Download `Agnania/NursData-MCQ` from Hugging Face.
-3. Start an OpenAI-compatible model endpoint.
-4. Run `scripts/evaluate_mcq.py`.
-5. Report exact-match accuracy and include the prediction JSON.
+3. Install vLLM serving dependencies with `pip install -r requirements-vllm.txt` if launching the released model locally.
+4. Start an OpenAI-compatible model endpoint.
+5. Run `scripts/evaluate_mcq.py`.
+6. Report exact-match accuracy and include the prediction JSON.
 
 ## Model Availability
 
-The EviNurse model link is not included yet. Once the model is available, update:
+The EviNurse model is released separately at:
 
-- `README.md`
-- `configs/model_server.example.yaml`
+https://huggingface.co/Agnania/EviNurse-32B
 
 ## Recommended Reporting
 
@@ -25,4 +25,3 @@ For each evaluated model, report:
 - Decoding parameters.
 - Correct count, total count, and accuracy.
 - Prediction file or checksum.
-

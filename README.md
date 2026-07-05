@@ -1,13 +1,13 @@
 # EviNurse
 
-EviNurse is a domain-specific large language model framework for evidence-based nursing. It was developed to improve access to high-quality nursing evidence and to support evidence-informed nursing practice through supervised fine-tuning and retrieval-augmented generation.
+EviNurse is a domain-specific large language model designed to support evidence-informed nursing practice. It was developed on Qwen3-32B using supervised fine-tuning and retrieval-augmented generation, with high-quality nursing evidence organized according to the 5S evidence pyramid.
 
 This repository provides reproducible materials for the automated multiple-choice question (MCQ) evaluation and model-serving interfaces reported in the EviNurse manuscript:
 
 - Benchmark access and sample data.
 - OpenAI-compatible MCQ evaluation code.
 - vLLM model-serving scripts for evaluation and deployment.
-- A de-identified OpenAI-compatible RAG API example.
+- A de-identified OpenAI-compatible RAG API example that preserves the source-level and passage-level retrieval interface.
 - Environment and dependency files.
 
 ## Resources
@@ -48,7 +48,9 @@ This repository provides reproducible materials for the automated multiple-choic
 │       ├── io.py
 │       └── metrics.py
 ├── LICENSE
-└── requirements.txt
+├── pyproject.toml
+├── requirements.txt
+└── requirements-vllm.txt
 ```
 
 ## Installation
@@ -57,6 +59,12 @@ This repository provides reproducible materials for the automated multiple-choic
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+For vLLM serving or the optional RAG API server, install the GPU serving dependencies in the same environment:
+
+```bash
+pip install -r requirements-vllm.txt
 ```
 
 ## Download the Benchmark
@@ -148,24 +156,30 @@ bash scripts/run_vllm_server.sh
 
 ## RAG API
 
-The manuscript system also used retrieval-augmented generation for evidence-based nursing responses. This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`.
+The manuscript system used retrieval-augmented generation for evidence-based nursing responses. User queries were rewritten into retrieval-oriented representations, then evidence was retrieved through a dual-stage strategy: source-level retrieval followed by passage-level retrieval within shortlisted sources. Retrieved evidence was filtered using semantic relevance, source characteristics, and suitability for the target question, with higher-level evidence prioritized according to the 5S evidence pyramid.
+
+This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`.
 
 The RAG API keeps the public serving interface and prompt construction logic while externalizing deployment-specific details:
 
 - `MODEL_PATH`: local model path or Hugging Face model id.
-- `RAG_BASE_URL`: URL of a retrieval service returning a list of objects with `content` and optional `doc_name`.
-- `RAG_ENDPOINT`: retrieval endpoint path, default `/getReference`.
+- `RAG_BASE_URL`: URL of a retrieval service.
+- `RAG_MODE`: `dual` or `single`, default `dual`.
+- `RAG_SOURCE_ENDPOINT`: optional source-level retrieval endpoint, default `/retrieve_sources`.
+- `RAG_PASSAGE_ENDPOINT`: optional passage-level retrieval endpoint, default `/retrieve_passages`.
+- `RAG_ENDPOINT`: single-stage fallback endpoint, default `/getReference`.
 
 Start the RAG API:
 
 ```bash
 MODEL_PATH=Agnania/EviNurse-32B \
 RAG_BASE_URL=http://127.0.0.1:50002 \
+RAG_MODE=dual \
 SERVED_MODEL_NAME=EviNurse \
 bash scripts/run_rag_api_server.sh
 ```
 
-The underlying knowledge base, private documents, server addresses, and deployment credentials are not included in this release.
+The underlying knowledge base, private documents, server addresses, and deployment credentials are not included in this release. If a deployment only exposes a single retrieval endpoint, set `RAG_MODE=single`.
 
 ## Why This Release
 
