@@ -2,6 +2,8 @@
 
 EviNurse is a domain-specific large language model designed to support evidence-informed nursing practice. It was developed on Qwen3-32B using supervised fine-tuning and retrieval-augmented generation, with high-quality nursing evidence organized according to the 5S evidence pyramid.
 
+This repository is an evaluation and serving code release. It is not a complete clinical system and does not include the private evidence knowledge base, retrieval index, deployment credentials, or production retrieval services used by any local deployment.
+
 This repository provides reproducible materials for the automated multiple-choice question (MCQ) evaluation and model-serving interfaces reported in the EviNurse manuscript:
 
 - Benchmark access and sample data.
@@ -9,6 +11,8 @@ This repository provides reproducible materials for the automated multiple-choic
 - vLLM model-serving scripts for evaluation and deployment.
 - A de-identified OpenAI-compatible RAG API example that preserves the source-level and passage-level retrieval interface.
 - Environment and dependency files.
+
+The included RAG API is a de-identified interface example. It preserves the request/response shape and retrieval-augmented generation flow, but cannot reproduce the full RAG system unless connected to a compatible external retrieval service and knowledge base.
 
 ## Resources
 
@@ -47,6 +51,7 @@ This repository provides reproducible materials for the automated multiple-choic
 │       ├── answer_extraction.py
 │       ├── io.py
 │       └── metrics.py
+├── .env.example
 ├── LICENSE
 ├── pyproject.toml
 ├── requirements.txt
@@ -65,6 +70,12 @@ For vLLM serving or the optional RAG API server, install the GPU serving depende
 
 ```bash
 pip install -r requirements-vllm.txt
+```
+
+Copy `.env.example` if you want to manage model-serving settings through environment variables:
+
+```bash
+cp .env.example .env
 ```
 
 ## Download the Benchmark
@@ -154,11 +165,32 @@ bash scripts/run_vllm_server.sh
 
 `scripts/run_eval_server.sh` is a thin wrapper around the same vLLM server with defaults used by the MCQ evaluation scripts. It is not a separate model implementation.
 
+### Hardware Notes
+
+EviNurse-32B is a 32B-parameter model. Full-precision or bfloat16 serving generally requires multi-GPU inference or another memory-saving deployment strategy. The example scripts support tensor parallelism through `TENSOR_PARALLEL_SIZE`.
+
+Recommended starting points:
+
+- Use multiple high-memory CUDA GPUs for the full 32B model.
+- Increase `TENSOR_PARALLEL_SIZE` to match the number of GPUs used by vLLM.
+- Reduce `MAX_MODEL_LEN` if GPU memory is insufficient.
+- Quantized or otherwise optimized deployments may have different memory requirements and are not configured in this repository.
+
+Example:
+
+```bash
+MODEL_PATH=Agnania/EviNurse-32B \
+SERVED_MODEL_NAME=EviNurse \
+TENSOR_PARALLEL_SIZE=4 \
+MAX_MODEL_LEN=4096 \
+bash scripts/run_vllm_server.sh
+```
+
 ## RAG API
 
 The manuscript system used retrieval-augmented generation for evidence-based nursing responses. User queries were rewritten into retrieval-oriented representations, then evidence was retrieved through a dual-stage strategy: source-level retrieval followed by passage-level retrieval within shortlisted sources. Retrieved evidence was filtered using semantic relevance, source characteristics, and suitability for the target question, with higher-level evidence prioritized according to the 5S evidence pyramid.
 
-This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`.
+This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`. It is provided to document and test the serving interface, not to distribute the underlying knowledge base.
 
 The RAG API keeps the public serving interface and prompt construction logic while externalizing deployment-specific details:
 
