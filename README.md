@@ -1,8 +1,6 @@
 # EviNurse
 
-EviNurse is a domain-specific large language model designed to support evidence-informed nursing practice. It was developed on Qwen3-32B using supervised fine-tuning and retrieval-augmented generation, with high-quality nursing evidence organized according to the 5S evidence pyramid.
-
-This repository is an evaluation and serving code release. It is not a complete clinical system and does not include the private evidence knowledge base, retrieval index, deployment credentials, or production retrieval services used by any local deployment.
+EviNurse is a domain-specific large language model system designed to support evidence-informed nursing practice. It was developed on Qwen3-32B using supervised fine-tuning and retrieval-augmented generation, with high-quality nursing evidence organized according to the 5S evidence pyramid.
 
 This repository provides reproducible materials for the automated multiple-choice question (MCQ) evaluation and model-serving interfaces reported in the EviNurse manuscript:
 
@@ -190,7 +188,7 @@ bash scripts/run_vllm_server.sh
 
 The manuscript system used retrieval-augmented generation for evidence-based nursing responses. User queries were rewritten into retrieval-oriented representations, then evidence was retrieved through a dual-stage strategy: source-level retrieval followed by passage-level retrieval within shortlisted sources. Retrieved evidence was filtered using semantic relevance, source characteristics, and suitability for the target question, with higher-level evidence prioritized according to the 5S evidence pyramid.
 
-This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`. It is provided to document and test the serving interface, not to distribute the underlying knowledge base.
+This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`. It is provided to document and test the serving interface.
 
 The RAG API keeps the public serving interface and prompt construction logic while externalizing deployment-specific details:
 
@@ -212,14 +210,6 @@ bash scripts/run_rag_api_server.sh
 ```
 
 The underlying knowledge base, private documents, server addresses, and deployment credentials are not included in this release. If a deployment only exposes a single retrieval endpoint, set `RAG_MODE=single`.
-
-## Why This Release
-
-Nursing-domain AI remains understudied, and reproducible benchmarks are needed to make model comparisons useful to the field. Releasing NursData-MCQ and the evaluation code enables readers to:
-
-- Reproduce the automated evaluation setting.
-- Compare general-purpose and nursing-domain models on the same MCQ benchmark.
-- Test future nursing AI systems under a transparent evaluation protocol.
 
 ## License
 
