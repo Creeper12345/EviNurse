@@ -14,9 +14,9 @@ This repository provides reproducible materials for the automated multiple-choic
 
 | Resource | Link |
 | --- | --- |
-| NursData-MCQ benchmark | [Agnania/NursData-MCQ](https://huggingface.co/datasets/Agnania/NursData-MCQ) |
-| Project repository | [Creeper12345/EviNurse](https://github.com/Creeper12345/EviNurse.git) |
-| EviNurse model | [Agnania/EviNurse-32B](https://huggingface.co/Agnania/EviNurse-32B) |
+| NursData-MCQ benchmark | [NursData-MCQ](https://huggingface.co/datasets/Agnania/NursData-MCQ) |
+| Project repository | [EviNurse](https://github.com/Creeper12345/EviNurse) |
+| EviNurse model | [EviNurse-32B](https://huggingface.co/Agnania/EviNurse-32B) |
 
 ## Repository Layout
 
