@@ -96,7 +96,7 @@ https://huggingface.co/Agnania/EviNurse-32B
 For each evaluated model, report:
 
 - Model name and version.
-- Endpoint framework, such as vLLM or SGLang.
+- Endpoint framework.
 - Prompt template.
 - Decoding parameters.
 - Correct count, total count, and accuracy.
