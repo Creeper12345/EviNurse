@@ -74,7 +74,7 @@ python scripts/evaluate_mcq.py \
 The evaluator prints exact-match accuracy:
 
 ```text
-Accuracy: 91.4500% (3144/3438)
+Accuracy: <accuracy> (<correct>/3438)
 Saved predictions to: outputs/nursdata_mcq_predictions.json
 ```
 
