@@ -10,13 +10,21 @@ resumable JSON result file.
 from __future__ import annotations
 
 import argparse
-import json
-import re
+import sys
 import time
 from pathlib import Path
 
 from openai import OpenAI
 from tqdm import tqdm
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from evinurse_eval.answer_extraction import extract_choice
+from evinurse_eval.io import load_json_records, save_json_records
+from evinurse_eval.metrics import accuracy
 
 
 def call_openai_api(
@@ -52,19 +60,6 @@ def call_openai_api(
             "duration": end_time - start_time,
             "error": repr(exc),
         }
-
-
-def extract_answer(response: str) -> str | None:
-    final_patterns = [
-        r"(?:答案|最终答案|Answer|Final answer)\s*[:：]?\s*([A-E])",
-        r"^\s*([A-E])\s*$",
-    ]
-    for pattern in final_patterns:
-        match = re.search(pattern, response, flags=re.IGNORECASE | re.MULTILINE)
-        if match:
-            return match.group(1).upper()
-    match = re.search(r"[A-E]", response)
-    return match.group(0).upper() if match else None
 
 
 def format_context(contexts: list[dict], top_k: int) -> str:
@@ -107,21 +102,6 @@ def format_prompt(item: dict, top_k_context: int) -> tuple[str, int]:
     return prompt, min(len(contexts), top_k_context)
 
 
-def load_json(path: str | Path) -> list[dict]:
-    with Path(path).open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, list):
-        raise ValueError("Input JSON must be a list of MCQ records.")
-    return data
-
-
-def write_results(path: str | Path, records: list[dict]) -> None:
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, help="Path to benchmark JSON.")
@@ -139,7 +119,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    data = load_json(args.input)
+    data = load_json_records(args.input)
     if args.limit:
         data = data[: args.limit]
 
@@ -156,7 +136,7 @@ def main() -> None:
             temperature=args.temperature,
             max_tokens=args.max_tokens,
         )
-        predicted_answer = extract_answer(api_result["response"])
+        predicted_answer = extract_choice(api_result["response"])
         answer_gt = item.get("answer")
 
         result = {
@@ -172,14 +152,13 @@ def main() -> None:
             "error": api_result["error"],
         }
         results.append(result)
-        write_results(args.output, results)
+        save_json_records(args.output, results)
 
         if args.request_sleep > 0:
             time.sleep(args.request_sleep)
 
-    correct_count = sum(1 for item in results if item["is_correct"])
-    accuracy = correct_count / len(results) if results else 0
-    print(f"Accuracy: {accuracy:.2%} ({correct_count}/{len(results)})")
+    correct_count, total_count, score = accuracy(results)
+    print(f"Accuracy: {score:.2%} ({correct_count}/{total_count})")
     print(f"Saved predictions to: {args.output}")
 
 
