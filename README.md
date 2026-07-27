@@ -39,9 +39,11 @@ The included RAG API is a de-identified interface example. It preserves the requ
 │   ├── evaluate_mcq_with_context.py
 │   ├── validate_dataset.py
 │   ├── run_eval_server.sh
+│   ├── run_dual_stage_retrieval_server.sh
 │   ├── run_rag_api_server.sh
 │   └── run_vllm_server.sh
 ├── server/
+│   ├── dual_stage_retrieval_api.py
 │   └── rag_openai_api.py
 ├── src/
 │   └── evinurse_eval/
@@ -186,11 +188,14 @@ bash scripts/run_vllm_server.sh
 
 ## RAG API
 
-The manuscript system used retrieval-augmented generation for evidence-based nursing responses. User queries were rewritten into retrieval-oriented representations, then evidence was retrieved through a dual-stage strategy: source-level retrieval followed by passage-level retrieval within shortlisted sources. Retrieved evidence was filtered using semantic relevance, source characteristics, and suitability for the target question, with higher-level evidence prioritized according to the 5S evidence pyramid.
+The manuscript system used retrieval-augmented generation for evidence-based nursing responses. User queries were rewritten into retrieval-oriented representations, then evidence was retrieved through a three-step strategy: summary-level source retrieval, chunk-level passage retrieval within shortlisted sources, and evidence-type supplementation. Retrieved evidence was filtered using semantic relevance, source characteristics, evidence category, publication year, and suitability for the target question, with higher-level evidence prioritized according to the 5S evidence pyramid.
 
-This repository includes a de-identified OpenAI-compatible RAG API example at `server/rag_openai_api.py`. It is provided to document and test the serving interface.
+This repository includes two de-identified RAG-related API examples:
 
-The RAG API keeps the public serving interface and prompt construction logic while externalizing deployment-specific details:
+- `server/dual_stage_retrieval_api.py`: a retrieval service example that implements summary-level source retrieval, chunk-level passage retrieval within shortlisted sources, metadata-aware scoring, reranking, and evidence-type supplementation.
+- `server/rag_openai_api.py`: an OpenAI-compatible generation API that rewrites user queries, calls a retrieval service, constructs the evidence-grounded prompt, and returns generated answers with context metadata.
+
+The generation API keeps the public serving interface and prompt construction logic while externalizing deployment-specific details:
 
 - `MODEL_PATH`: local model path or Hugging Face model id.
 - `RAG_BASE_URL`: URL of a retrieval service.
@@ -209,7 +214,41 @@ SERVED_MODEL_NAME=EviNurse \
 bash scripts/run_rag_api_server.sh
 ```
 
-The underlying knowledge base, private documents, server addresses, and deployment credentials are not included in this release. If a deployment only exposes a single retrieval endpoint, set `RAG_MODE=single`.
+To run the dual-stage retrieval service example, connect it to compatible summary-level and chunk-level vector collections built from evidence sources to which you have access:
+
+```bash
+RAG_EMBEDDING_MODEL=BAAI/bge-m3 \
+RAG_RERANKER_MODEL=BAAI/bge-reranker-v2-m3 \
+MILVUS_HOST=127.0.0.1 \
+MILVUS_PORT=19530 \
+MILVUS_DB_NAME=nursingdb \
+SUMMARY_COLLECTION=nursing_summary \
+CHUNK_COLLECTION=nursing_article \
+bash scripts/run_dual_stage_retrieval_server.sh
+```
+
+The summary-level collection should contain `embedding_vector`, `source_id` or `doc_name`, `doc_name`, `summary_text`, and `domain_category` fields. The chunk-level collection should contain `embedding_vector`, `source_id` or `doc_name`, `doc_name`, `chunk_text`, and `domain_category` fields. Equivalent field names can be configured through environment variables. The reported manuscript experiments used document preprocessing, recursive chunking, source-level summarization, BGE-M3 embeddings, vector retrieval, BGE-reranker-v2-m3 reranking, metadata-aware scoring, and evidence-type supplementation based on the 5S evidence pyramid. If only a chunk-level collection is available, the service can still be used with `strategy=single_chunk`; summary-level retrieval is required only for `dual_v1`, `dual_v2`, and `dual_v3`.
+
+The retrieval service supports the following strategies:
+
+| Strategy | Description |
+| --- | --- |
+| `single_chunk` | Baseline retrieval over the chunk-level knowledge base only, followed by optional reranking and top-k selection. This does not use summary-level source retrieval or evidence-type supplementation. |
+| `dual_v1` | Summary-level source retrieval followed by chunk-level retrieval within selected sources. Uses smaller source/chunk candidate pools. |
+| `dual_v2` | Same two-stage structure with larger candidate pools and optional preferred-evidence handling for higher-level evidence categories. |
+| `dual_v3` | Same as `dual_v2`, with optional temporal metadata handling when an examination year or query year is available. |
+
+The public example documents the retrieval structure and exposes configuration hooks for category and temporal scoring, but does not disclose the study-specific priority weights. By default, the released service ranks candidates primarily by reranker score and leaves category-priority and temporal bonuses disabled unless users configure them for their own corpora.
+
+Example request for the initial non-dual chunk-level baseline:
+
+```bash
+curl -X POST http://127.0.0.1:50002/getReference \
+  -H "Content-Type: application/json" \
+  -d '{"request":"pressure injury prevention in older adults","strategy":"single_chunk","top_k":5}'
+```
+
+The underlying knowledge base, private documents, server addresses, and deployment credentials are not included in this release because the evidence sources include copyrighted or licensed materials. If a deployment only exposes a single retrieval endpoint, set `RAG_MODE=single`.
 
 ## License
 

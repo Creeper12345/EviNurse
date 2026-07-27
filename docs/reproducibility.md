@@ -91,6 +91,90 @@ The EviNurse model is released separately at:
 
 https://huggingface.co/Agnania/EviNurse-32B
 
+## Retrieval-Augmented Generation Reproducibility
+
+The released repository documents the RAG serving and evaluation workflow, but
+does not include the full retrieval knowledge base, evidence documents, or the
+deployed retrieval service. These components are not redistributed because the
+retrieval corpus contains evidence sources that may be subject to copyright,
+database licensing, or platform access restrictions.
+
+The available RAG-related components are:
+
+- `server/dual_stage_retrieval_api.py`: a de-identified dual-stage retrieval
+  service example.
+- `server/rag_openai_api.py`: an OpenAI-compatible generation API that calls a
+  retrieval service and constructs the evidence-grounded prompt.
+- `scripts/evaluate_mcq_with_context.py`: an evaluator for benchmark records
+  that already include retrieved context snippets.
+- Configuration through environment variables for model paths, retrieval
+  endpoints, vector collection identifiers, and field names.
+
+To reproduce a local RAG workflow, researchers need access to the same or
+equivalent evidence sources and should:
+
+1. Extract and clean evidence documents.
+2. Segment documents into recursive text chunks with a maximum chunk
+   length of 1,024 characters and an overlap of 256 characters.
+3. Build a summary-level knowledge base by storing source identifiers, document
+   titles, source categories, publication years when available, source
+   summaries, and summary embeddings.
+4. Build a chunk-level knowledge base by storing source identifiers, document
+   titles, source categories, publication years when available, chunk text, and
+   chunk embeddings.
+5. Encode summaries and chunks with BGE-M3.
+6. Use vector retrieval with L2 distance and rerank candidates with
+   BGE-reranker-v2-m3.
+7. Run metadata-aware dual-stage retrieval: summary-level source selection
+   followed by chunk-level passage selection within shortlisted sources.
+8. Apply evidence-type supplementation so that the final evidence context is
+   not dominated by one source type and can include higher-level evidence, such
+   as guidelines, evidence summaries, and systematic reviews, when available.
+9. Use the self-deployed llm or the OpenAI-compatible RAG API to reproduce
+   the answer-generation and MCQ-evaluation workflow.
+
+Example retrieval service command:
+
+```bash
+RAG_EMBEDDING_MODEL=BAAI/bge-m3 \
+RAG_RERANKER_MODEL=BAAI/bge-reranker-v2-m3 \
+MILVUS_HOST=127.0.0.1 \
+MILVUS_PORT=19530 \
+MILVUS_DB_NAME=nursingdb \
+SUMMARY_COLLECTION=nursing_summary \
+CHUNK_COLLECTION=nursing_article \
+bash scripts/run_dual_stage_retrieval_server.sh
+```
+
+The service exposes `/getReference`, which can be consumed by
+`server/rag_openai_api.py` through `RAG_ENDPOINT=/getReference`.
+If only a chunk-level vector collection is available, the same service can run
+the `single_chunk` baseline without a summary-level collection. Summary-level
+collection access is required only for `dual_v1`, `dual_v2`, and `dual_v3`.
+
+Retrieval strategies:
+
+| Strategy | Reproducibility role |
+| --- | --- |
+| `single_chunk` | Initial chunk-level retrieval baseline. It searches only the chunk-level knowledge base, optionally reranks candidates, and returns the final top-k passages. |
+| `dual_v1` | Two-stage retrieval with summary-level source screening followed by chunk-level retrieval within selected sources. It uses smaller candidate pools. |
+| `dual_v2` | Two-stage retrieval with larger candidate pools and optional preferred-evidence handling for higher-level evidence categories. |
+| `dual_v3` | `dual_v2` plus optional temporal metadata handling when an examination year or query year is available. |
+
+The released example documents the retrieval structure and exposes configuration
+hooks for category and temporal scoring, but does not disclose the
+study-specific priority weights. By default, the public service ranks candidates
+primarily by reranker score and leaves category-priority and temporal bonuses
+disabled unless users configure them for their own corpora.
+
+Example request for non-dual chunk-level retrieval:
+
+```bash
+curl -X POST http://127.0.0.1:50002/getReference \
+  -H "Content-Type: application/json" \
+  -d '{"request":"pressure injury prevention in older adults","strategy":"single_chunk","top_k":5}'
+```
+
 ## Recommended Reporting
 
 For each evaluated model, report:

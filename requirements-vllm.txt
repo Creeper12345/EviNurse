@@ -4,3 +4,6 @@ torch>=2.6.0,<3.0.0
 transformers>=4.51.0,<5.0.0
 vllm>=0.8.5,<1.0.0
 safetensors>=0.4.5
+sentence-transformers>=3.0.0
+FlagEmbedding>=1.2.10
+pymilvus>=2.4.0
